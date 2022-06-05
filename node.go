@@ -147,13 +147,10 @@ type Node struct {
 
 func (n *Node) hashKey(key string) ([]byte, error) {
 	hashFunction := n.cnf.Hash()
-
 	_, err := hashFunction.Write([]byte(key))
-
 	if err != nil {
 		return nil, err
 	}
-
 	val := hashFunction.Sum(nil)
 	return val, nil
 }
@@ -276,7 +273,6 @@ func (n *Node) delete(key string) error {
 }
 
 func (n *Node) transferKeys(pred, succ *api.Node) {
-
 	keys, _ := n.requestKeys(pred, succ)
 	if len(keys) > 0 {
 		log.Printf("Transfer Keys: %+v", keys)
@@ -290,8 +286,12 @@ func (n *Node) transferKeys(pred, succ *api.Node) {
 		n.storage.Set(item.Key, item.Value)
 		delKeyList = append(delKeyList, item.Key)
 	}
+
+
 	// delete the keys from the successor node, as current node
 	// is responsible for the keys
+	//
+	// 通知后继节点，不需要再保存这些 kv 了。
 	if len(delKeyList) > 0 {
 		n.deleteKeys(succ, delKeyList)
 	}
@@ -351,23 +351,26 @@ func (n *Node) findSuccessor(id []byte) (*api.Node, error) {
 
 	var err error
 
+	// 如果 target 位于 (curr, succ) 之间，就返回 succ
 	if keyBetwIncludeRight(id, curr.Id, succ.Id) {
 		return succ, nil
 	} else {
+		// 遍历本地路由表，查找 target 的最近前驱 pred
 		pred := n.closestPrecedingNode(id)
+
+		// 如果其最近前驱即为 curr ，则查找 curr 的后继
 		if bytesEqual(pred.Id, n.Id) {
 			succ, err = n.getSuccessorRPC(pred)
-
 			if err != nil {
 				return nil, err
 			}
-
 			if succ == nil {
 				return pred, nil
 			}
 			return succ, nil
 		}
 
+		// 向 pred 查询 target 的后继
 		succ, err := n.findSuccessorRPC(pred, id)
 		// fmt.Println("successor to closest node ", succ, err)
 		if err != nil {
@@ -378,8 +381,8 @@ func (n *Node) findSuccessor(id []byte) (*api.Node, error) {
 			return curr, nil
 		}
 		return succ, nil
-
 	}
+
 	// return nil, nil
 }
 
@@ -388,14 +391,17 @@ func (n *Node) closestPrecedingNode(id []byte) *api.Node {
 	n.predMtx.RLock()
 	defer n.predMtx.RUnlock()
 
+	// 当前节点
 	curr := n.Node
 
+	// 逆序遍历路由表，这样找到的第一个前驱就是最近的
 	m := len(n.fingerTable) - 1
 	for i := m; i >= 0; i-- {
 		f := n.fingerTable[i]
 		if f == nil || f.Node == nil {
 			continue
 		}
+		// 如果 table.Id 位于 <curr, target> 之间，则其为 target 的前驱
 		if between(f.Id, curr.Id, id) {
 			return f.Node
 		}
@@ -409,18 +415,21 @@ func (n *Node) closestPrecedingNode(id []byte) *api.Node {
 //   if (x in (n, successor))
 //     successor = x
 //   successor.notify(n)
+//
+// 定时检查和更新直接后继。
 func (n *Node) stabilize() {
-	n.succMtx.RLock()
 
+	// 获取当前节点的后继
+	n.succMtx.RLock()
 	succ := n.successor
 	if succ == nil {
 		log.Printf("No successor found")
 		n.succMtx.RUnlock()
 		return
 	}
-
 	n.succMtx.RUnlock()
 
+	// 发送 rpc 查询后继节点的前驱
 	pred, err := n.getPredecessorRPC(succ)
 	if err != nil || pred == nil {
 		log.Println("Error getting predecessor, ", err, pred)
@@ -428,16 +437,24 @@ func (n *Node) stabilize() {
 	}
 
 	// if pred.Id exists check if current node is between predecessor and successor
+	//
+	// 如果其前驱位于 <curr, succ> 之间，意味着当前节点的直接后继发生变化，需要更新。
 	if pred.Id != nil && between(pred.Id, n.Id, succ.Id) {
 		n.succMtx.Lock()
 		n.successor = pred
 		n.succMtx.Unlock()
 	}
 
+	n.succMtx.RLock()
+	succ = n.successor
+	n.succMtx.RUnlock()
+
 	// call notify
+	// 通知 succ 自己是他的前驱
 	n.notify(succ, n.Node)
 }
 
+// 检查前驱是否存在
 func (n *Node) checkPredecessor() {
 	n.predMtx.RLock()
 	pred := n.predecessor

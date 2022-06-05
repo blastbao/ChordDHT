@@ -41,13 +41,21 @@ func keyBetwIncludeRight(key, left, right []byte) bool {
 }
 
 // Checks if a key is STRICTLY between two ID's exclusively
+//
+//
 func between(key, left, right []byte) bool {
 	switch bytes.Compare(left, right) {
+	// a == b
 	case 0:
+		// left != key
 		return bytes.Compare(left, key) != 0
+	// a > b
 	case 1:
+		// left < key || right > key
 		return bytes.Compare(left, key) == -1 || bytes.Compare(right, key) >= 0
+	// a < b
 	case -1:
+		// left < key || right > key
 		return bytes.Compare(left, key) == -1 && bytes.Compare(right, key) >= 0
 	}
 	return false

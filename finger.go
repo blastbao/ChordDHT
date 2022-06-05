@@ -34,8 +34,9 @@ func newFingerEntry(idHash []byte, nodeStruct *api.Node) *fingerEntry {
 }
 
 // Computes the offset by (n + 2^i) mod (2^m)
+//
+//
 func fingerID(n []byte, i int, m int) []byte {
-
 	// Convert the ID to a bigint
 	idBigInt := (&big.Int{}).SetBytes(n)
 
@@ -63,7 +64,9 @@ func fingerID(n []byte, i int, m int) []byte {
 //   i = random index > 1 into finger []
 //   finger[i].node = find_successor(finger[i].start)
 func (n *Node) fixFinger(next int) int {
+
 	nextIndex := next + 1
+
 	// use hashSize to figure out the next num
 	nextNum := nextIndex % n.cnf.HashSize
 

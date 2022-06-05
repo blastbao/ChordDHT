@@ -33,6 +33,8 @@ func NewMapStore(hashFunc func() hash.Hash) Storage {
 }
 
 // hashKey generates the hash of a given key with the function used in the mapStore object
+//
+// 计算 hash(key)
 func (storeptr *mapStore) hashKey(key string) ([]byte, error) {
 	h := storeptr.Hash()
 	if _, err := h.Write([]byte(key)); err != nil {
@@ -43,6 +45,8 @@ func (storeptr *mapStore) hashKey(key string) ([]byte, error) {
 }
 
 // Get performs a direct retrieval from the map of key-values to get the bytearray representation
+//
+// 查询 key-value
 func (storeptr *mapStore) Get(key string) ([]byte, error) {
 	val, ok := storeptr.data[key]
 	if !ok {
@@ -52,6 +56,8 @@ func (storeptr *mapStore) Get(key string) ([]byte, error) {
 }
 
 // Set adds a key to the mapStore.s
+//
+// 保存 key-value
 func (storeptr *mapStore) Set(key, value string) error {
 	storeptr.data[key] = value
 	return nil
@@ -69,9 +75,11 @@ func (storeptr *mapStore) Between(from []byte, to []byte) ([]*api.KV, error) {
 	betwVals := make([]*api.KV, 0, 10)
 	for key, val := range storeptr.data {
 		// generate hash of each key
+		// 计算 hash(key)
 		hashedKey, err := storeptr.hashKey(key)
 		if err == nil {
 			// check if any of the hashed keys match the search range; add if it does to returned slice
+			// 检查 hashedKey 是否位于 from, to 之间
 			if keyBetwIncludeRight(hashedKey, from, to) {
 				pair := &api.KV{
 					Key:   key,
@@ -81,6 +89,7 @@ func (storeptr *mapStore) Between(from []byte, to []byte) ([]*api.KV, error) {
 			}
 		}
 	}
+
 	// Return all values that are between the given byte sets (hash-value wise)
 	return betwVals, nil
 }
